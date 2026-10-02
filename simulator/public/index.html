@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Simulator - Lumina IoT</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .simulator-panel {
+            background-color: var(--panel-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .control-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        /* Toggle Switch for Presence */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider-toggle {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #475569;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider-toggle:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider-toggle {
+            background-color: var(--accent-color);
+        }
+
+        input:checked + .slider-toggle:before {
+            transform: translateX(26px);
+        }
+
+        /* Range Slider for Light Level */
+        input[type=range] {
+            width: 100%;
+            margin-top: 0.5rem;
+            cursor: pointer;
+        }
+
+        .value-display {
+            float: right;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="simulator-panel">
+        <h1>Simulador ESP32 (sim-01)</h1>
+
+        <div class="control-group">
+            <label for="presence-toggle">Sensor de Presencia</label>
+            <label class="switch">
+                <input type="checkbox" id="presence-toggle">
+                <span class="slider-toggle"></span>
+            </label>
+        </div>
+
+        <div class="control-group">
+            <label for="light-level">Nivel de Luz <span id="light-value" class="value-display">0%</span></label>
+            <input type="range" id="light-level" min="0" max="100" value="0">
+        </div>
+    </div>
+
+    <script>
+        const presenceToggle = document.getElementById('presence-toggle');
+        const lightLevel = document.getElementById('light-level');
+        const lightValue = document.getElementById('light-value');
+
+        // Función para enviar la actualización al backend
+        const updateState = async (data) => {
+            try {
+                const response = await fetch('/api/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                if (!response.ok) {
+                    console.error('Error al actualizar el estado:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Error de red:', error);
+            }
+        };
+
+        // Escuchar cambios en la presencia
+        presenceToggle.addEventListener('change', (e) => {
+            const isPresent = e.target.checked;
+            updateState({ presence: isPresent });
+        });
+
+        // Escuchar cambios en el nivel de luz
+        lightLevel.addEventListener('input', (e) => {
+            const level = e.target.value;
+            lightValue.textContent = `${level}%`;
+            updateState({ lightLevel: level });
+        });
+    </script>
+</body>
+</html>
