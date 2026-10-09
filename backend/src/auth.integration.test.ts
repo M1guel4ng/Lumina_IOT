@@ -7,6 +7,9 @@ import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { getConfig } from "./config/env.js";
 import { User } from "./models/User.js";
+import { NodeState } from "./models/NodeState.js";
+import { Event } from "./models/Event.js";
+import { markOfflineNodes } from "./services/offlineMonitor.js";
 
 process.env.JWT_SECRET = "test-only-secret-with-at-least-32-characters";
 
@@ -15,17 +18,22 @@ const activeUsername = `test-active-${suffix}`;
 const inactiveUsername = `test-inactive-${suffix}`;
 const password = "Luz#Segura2026!";
 let activeUserId = "";
+const deviceId = `test-node-${suffix}`;
 
 before(async () => {
   await connectDatabase(getConfig().mongodbUri);
   const passwordHash = await bcrypt.hash(password, 12);
   const active = await User.create({ username: activeUsername, passwordHash, role: "admin", active: true });
   await User.create({ username: inactiveUsername, passwordHash, role: "operator", active: false });
+  await NodeState.create({ deviceId, presence: true, lightLevel: 42, light: "on", mode: "manual", status: "online", stale: false, lastSeenAt: new Date(), lastTelemetryAt: new Date() });
+  await Event.create({ deviceId, type: "presence", value: true, source: "node" });
   activeUserId = String(active._id);
 });
 
 after(async () => {
   await User.deleteMany({ username: { $in: [activeUsername, inactiveUsername] } });
+  await NodeState.deleteMany({ deviceId });
+  await Event.deleteMany({ deviceId });
   await disconnectDatabase();
 });
 
@@ -69,6 +77,27 @@ test("/me acepta un JWT válido", async () => {
   assert.equal(response.body.id, activeUserId);
   assert.equal(response.body.username, activeUsername);
   assert.equal("passwordHash" in response.body, false);
+});
+
+test("rutas del dashboard exigen autenticación y devuelven nodos y eventos", async () => {
+  const app = createApp();
+  assert.equal((await request(app).get("/api/nodes")).status, 401);
+  const login = await request(app).post("/api/auth/login").send({ username: activeUsername, password });
+  const authorization = `Bearer ${login.body.token}`;
+  const nodes = await request(app).get("/api/nodes").set("Authorization", authorization);
+  const events = await request(app).get(`/api/events?deviceId=${deviceId}&limit=10`).set("Authorization", authorization);
+  assert.equal(nodes.status, 200);
+  assert.ok(nodes.body.nodes.some((node: { deviceId: string }) => node.deviceId === deviceId));
+  assert.equal(events.status, 200);
+  assert.equal(events.body.events[0].deviceId, deviceId);
+});
+
+test("monitor marca un nodo sin heartbeat como desconectado y desactualizado", async () => {
+  await NodeState.updateOne({ deviceId }, { $set: { status: "online", stale: false, lastSeenAt: new Date(Date.now() - 30000) } });
+  assert.equal(await markOfflineNodes(25000), 1);
+  const node = await NodeState.findOne({ deviceId }).lean();
+  assert.equal(node?.status, "offline");
+  assert.equal(node?.stale, true);
 });
 
 test("login limita intentos repetidos", async () => {

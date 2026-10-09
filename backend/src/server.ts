@@ -2,15 +2,23 @@ import type { Server } from "node:http";
 import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./config/database.js";
 import { getConfig } from "./config/env.js";
+import { startMqtt, stopMqtt } from "./services/mqttService.js";
+import { startOfflineMonitor, stopOfflineMonitor } from "./services/offlineMonitor.js";
+import { closeRealtimeClients } from "./services/realtimeService.js";
 
 const config = getConfig();
 let server: Server | undefined;
 async function start(): Promise<void> {
   await connectDatabase(config.mongodbUri);
+  startMqtt(config.mqttUrl);
+  startOfflineMonitor(config.nodeOfflineMs);
   server = createApp().listen(config.port, () => console.log(`Servidor ejecutándose en http://localhost:${config.port}`));
 }
 async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} recibido. Cerrando servidor...`);
+  stopOfflineMonitor();
+  closeRealtimeClients();
+  await stopMqtt();
   if (server) await new Promise<void>((resolve, reject) => server!.close((error) => error ? reject(error) : resolve()));
   await disconnectDatabase();
   process.exit(0);
