@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { getConfig } from "./config/env.js";
 import { errorMiddleware } from "./middleware/errorMiddleware.js";
 import { authRouter } from "./routes/authRoutes.js";
+import { dashboardRouter } from "./routes/dashboardRoutes.js";
 
 export function createApp() {
   const config = getConfig();
@@ -16,6 +17,7 @@ export function createApp() {
   app.get("/", (_req, res) => res.json({ message: "Smart Lighting IoT API funcionando" }));
   app.get("/api/health", (_req, res) => res.json({ success: true, database: "connected" }));
   app.use("/api/auth", authRouter);
+  app.use("/api", dashboardRouter);
   app.use((_req, res) => res.status(404).json({ success: false, message: "Ruta no encontrada." }));
   app.use(errorMiddleware);
   return app;

@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-export interface AppConfig { port: number; mongodbUri: string; jwtSecret: string; jwtExpiresIn: string; frontendUrl: string; }
+export interface AppConfig { port: number; mongodbUri: string; jwtSecret: string; jwtExpiresIn: string; frontendUrl: string; mqttUrl: string; nodeOfflineMs: number; }
 export function getConfig(): AppConfig {
   const required = ["MONGODB_URI", "JWT_SECRET", "FRONTEND_URL"] as const;
   const missing = required.filter((key) => !process.env[key]?.trim());
@@ -10,5 +10,7 @@ export function getConfig(): AppConfig {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT debe ser un puerto válido");
   const jwtSecret = process.env.JWT_SECRET!.trim();
   if (jwtSecret.length < 16) throw new Error("JWT_SECRET debe tener al menos 16 caracteres");
-  return { port, mongodbUri: process.env.MONGODB_URI!.trim(), jwtSecret, jwtExpiresIn: process.env.JWT_EXPIRES_IN?.trim() || "2h", frontendUrl: process.env.FRONTEND_URL!.trim() };
+  const nodeOfflineMs = Number(process.env.NODE_OFFLINE_MS ?? 25000);
+  if (!Number.isFinite(nodeOfflineMs) || nodeOfflineMs < 10000) throw new Error("NODE_OFFLINE_MS debe ser al menos 10000");
+  return { port, mongodbUri: process.env.MONGODB_URI!.trim(), jwtSecret, jwtExpiresIn: process.env.JWT_EXPIRES_IN?.trim() || "2h", frontendUrl: process.env.FRONTEND_URL!.trim(), mqttUrl: process.env.MQTT_URL?.trim() || "mqtt://localhost:1883", nodeOfflineMs };
 }
