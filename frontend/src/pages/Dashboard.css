@@ -1,0 +1,6 @@
+.dashboard-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: linear-gradient(135deg, #07172f, #173f76); }
+.dashboard-card { width: min(620px, 100%); padding: 48px; border-radius: 28px; background: white; box-shadow: 0 28px 80px #020b1d80; }
+.dashboard-brand { display: flex; align-items: center; gap: 12px; color: #153466; }
+.dashboard-brand > span { color: #f4ba36; font-size: 38px; }.dashboard-brand strong, .dashboard-brand small { display: block; }.dashboard-brand small { color: #72809c; }
+.dashboard-card h1 { margin: 38px 0 12px; font-size: clamp(28px, 5vw, 42px); }.dashboard-card p { color: #64718c; line-height: 1.7; }.user-chip { display: inline-block; margin: 20px 0 32px; padding: 10px 14px; border-radius: 10px; background: #eef4ff; }
+.dashboard-card button { display: block; padding: 13px 20px; border: 0; border-radius: 10px; color: white; background: #2563d9; font-weight: 700; }
