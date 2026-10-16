@@ -14,16 +14,32 @@ export async function getNode(req: Request, res: Response): Promise<void> {
   res.json(node);
 }
 
+/**
+ * GET /api/state
+ * Devuelve el último estado conocido de cada nodo.
+ * Criterio HU-2: "cuando se consulte GET /api/state, debe devolverse el último estado conocido de cada nodo"
+ */
+export async function getState(_req: Request, res: Response): Promise<void> {
+  const nodes = await NodeState.find().sort({ deviceId: 1 }).lean();
+  res.json({ count: nodes.length, nodes });
+}
+
+/**
+ * GET /api/events
+ * Devuelve eventos ordenados del más reciente al más antiguo.
+ * Soporta filtros: deviceId, type, limit (1-100).
+ * Criterio HU-2: "deben devolverse ordenados del más reciente al más antiguo y permitir filtrar por tipo y limitar la cantidad de resultados"
+ */
 export async function listEvents(req: Request, res: Response): Promise<void> {
   const deviceId = typeof req.query.deviceId === "string" ? req.query.deviceId : undefined;
   const type = typeof req.query.type === "string" ? req.query.type : undefined;
-  const requestedLimit = Number(req.query.limit ?? 10);
-  const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 10;
+  const requestedLimit = Number(req.query.limit ?? 20);
+  const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 200) : 20;
   const filter: Record<string, string> = {};
   if (deviceId) filter.deviceId = deviceId;
   if (type) filter.type = type;
   const events = await Event.find(filter).sort({ timestamp: -1 }).limit(limit).lean();
-  res.json({ events });
+  res.json({ count: events.length, limit, events });
 }
 
 export function realtime(req: Request, res: Response): void {
