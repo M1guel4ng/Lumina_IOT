@@ -16,7 +16,7 @@ export async function processTelemetry(payload: TelemetryPayload): Promise<void>
   const state = await NodeState.findOneAndUpdate(
     { deviceId: payload.deviceId },
     { $set: { presence: payload.presence, lightLevel: payload.lightLevel, light: payload.light, mode: payload.mode, status: "online", stale: false, lastSeenAt: now, lastTelemetryAt: now } },
-    { upsert: true, new: true, runValidators: true },
+    { upsert: true, returnDocument: 'after', runValidators: true },
   ).lean();
 
   const events: Array<{ deviceId: string; type: string; value: unknown; source: string; timestamp: Date }> = [];
@@ -33,7 +33,7 @@ export async function processStatus(deviceId: string, status: "online" | "offlin
   const now = new Date();
   const previous = await NodeState.findOne({ deviceId }).lean();
   const update = status === "online" ? { status, stale: false, lastSeenAt: now } : { status, stale: true };
-  const state = await NodeState.findOneAndUpdate({ deviceId }, { $set: update }, { upsert: true, new: true, runValidators: true }).lean();
+  const state = await NodeState.findOneAndUpdate({ deviceId }, { $set: update }, { upsert: true, returnDocument: 'after', runValidators: true }).lean();
   if (!previous || previous.status !== status) await Event.create({ deviceId, type: "connection", value: status, source: "system", timestamp: now });
   broadcastRealtime(status === "online" ? "node-online" : "node-offline", state);
 }

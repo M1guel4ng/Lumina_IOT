@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import { getEvents, getNodes, streamRealtime, type NodeEvent, type NodeState } from '../services/dashboardService'
@@ -41,14 +41,17 @@ export function Dashboard() {
   const loadEvents = useCallback(async (deviceId: string) => { try { setEvents(await getEvents(deviceId)) } catch (reason) { setError(reason instanceof Error ? reason.message : 'No se pudieron cargar los eventos.') } }, [])
   useEffect(() => { getNodes().then((items) => { setNodes(items); if (items[0]) { setSelectedId(items[0].deviceId); void loadEvents(items[0].deviceId) } }).catch((reason) => setError(reason instanceof Error ? reason.message : 'No se pudieron cargar los nodos.')).finally(() => setLoading(false)) }, [loadEvents])
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
+  const selectedIdRef = useRef(selectedId)
+  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
+
   useEffect(() => {
     const controller = new AbortController(); let reconnectTimer: ReturnType<typeof setTimeout> | undefined
     const connect = () => void streamRealtime((message) => {
       setNodes((current) => { const exists = current.some((node) => node.deviceId === message.data.deviceId); return exists ? current.map((node) => node.deviceId === message.data.deviceId ? message.data : node) : [...current, message.data].sort((a, b) => a.deviceId.localeCompare(b.deviceId)) })
-      if (message.data.deviceId === selectedId) void loadEvents(selectedId)
+      if (message.data.deviceId === selectedIdRef.current) void loadEvents(selectedIdRef.current)
     }, controller.signal).catch(() => { if (!controller.signal.aborted) reconnectTimer = setTimeout(connect, 2000) })
     connect(); return () => { controller.abort(); if (reconnectTimer) clearTimeout(reconnectTimer) }
-  }, [selectedId, loadEvents])
+  }, [loadEvents])
 
   function selectNode(deviceId: string) { setSelectedId(deviceId); void loadEvents(deviceId) }
   function signOut() { logout(); navigate('/login', { replace: true }) }
