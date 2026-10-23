@@ -173,7 +173,32 @@ client.on('message', (topic, message) => {
 client.on('reconnect', () => console.log('[MQTT] Reconectando...'));
 client.on('error', (err) => console.error('[MQTT] Error:', err.message));
 
-// ─── Funciones de publicación ─────────────────────────────────────────────────
+// ─── Temporizadores de Auto-Apagado de Luz (25 segundos sin presencia) ────────
+const lightTimers = {};
+
+function resetLightTimer(deviceId) {
+    if (lightTimers[deviceId]) {
+        clearTimeout(lightTimers[deviceId]);
+        lightTimers[deviceId] = null;
+    }
+
+    const node = nodes[deviceId];
+    if (!node) return;
+
+    // Si la luz está encendida y no hay presencia detectada:
+    // Programar auto-apagado de la luz tras 25 segundos
+    if (node.light === 'on' && !node.presence) {
+        console.log(`[TEMPORIZADOR] ${deviceId}: Luz encendida sin presencia. Se apagará automáticamente en 25 segundos.`);
+        lightTimers[deviceId] = setTimeout(() => {
+            if (node.light === 'on' && !node.presence) {
+                console.log(`[AUTO-APAGADO] ${deviceId}: 25 segundos sin presencia cumplidos. Apagando luz automáticamente.`);
+                node.light = 'off';
+                publishTelemetry(deviceId);
+            }
+            lightTimers[deviceId] = null;
+        }, 25000);
+    }
+}
 
 /**
  * Publica telemetría completa del nodo → el backend registra cambios de estado.
@@ -189,6 +214,7 @@ function publishTelemetry(deviceId) {
         { qos: 0 }
     );
     console.log(`[TELEMETRY] ${deviceId}: ${JSON.stringify(payload)}`);
+    resetLightTimer(deviceId);
 }
 
 /**
