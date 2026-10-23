@@ -37,3 +37,27 @@ export async function processStatus(deviceId: string, status: "online" | "offlin
   if (!previous || previous.status !== status) await Event.create({ deviceId, type: "connection", value: status, source: "system", timestamp: now });
   broadcastRealtime(status === "online" ? "node-online" : "node-offline", state);
 }
+
+/**
+ * Procesa un latido de vida (heartbeat) periódico emitido cada 10 s por el nodo/ESP32.
+ * Renueva lastSeenAt y asegura status='online' sin generar registros de Eventos (Criterio HU-2).
+ * Esto permite que offlineMonitor (25 s) detecte caídas reales de hardware sin desconectar
+ * falsamente a los nodos cuando no hay cambios de sensores.
+ */
+export async function processHeartbeat(deviceId: string): Promise<void> {
+  const now = new Date();
+  const previous = await NodeState.findOne({ deviceId }).lean();
+  const wasOffline = !previous || previous.status !== "online";
+
+  const state = await NodeState.findOneAndUpdate(
+    { deviceId },
+    { $set: { status: "online", stale: false, lastSeenAt: now } },
+    { returnDocument: "after" }
+  ).lean();
+
+  if (wasOffline && state) {
+    await Event.create({ deviceId, type: "connection", value: "online", source: "system", timestamp: now });
+    broadcastRealtime("node-online", state);
+  }
+}
+

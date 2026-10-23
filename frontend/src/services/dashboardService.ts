@@ -10,6 +10,17 @@ async function getJson<T>(path: string): Promise<T> { const response = await fet
 export async function getNodes(): Promise<NodeState[]> { return (await getJson<{ nodes: NodeState[] }>('/api/nodes')).nodes }
 export async function getEvents(deviceId: string): Promise<NodeEvent[]> { return (await getJson<{ events: NodeEvent[] }>(`/api/events?deviceId=${encodeURIComponent(deviceId)}&limit=10`)).events }
 
+export async function controlNode(deviceId: string, action: 'light_on' | 'light_off'): Promise<{ success: boolean; message: string }> {
+  const token = getToken()
+  const response = await fetch(`${API_URL}/api/nodes/${encodeURIComponent(deviceId)}/control`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ action }),
+  })
+  if (!response.ok) throw new Error(response.status === 401 ? 'Tu sesión expiró.' : 'No se pudo enviar el comando.')
+  return response.json() as Promise<{ success: boolean; message: string }>
+}
+
 export async function streamRealtime(onMessage: (message: RealtimeMessage) => void, signal: AbortSignal): Promise<void> {
   const response = await fetch(`${API_URL}/api/realtime`, { headers: { ...headers(), Accept: 'text/event-stream' }, signal })
   if (!response.ok || !response.body) throw new Error('No se pudo abrir el canal en tiempo real.')
