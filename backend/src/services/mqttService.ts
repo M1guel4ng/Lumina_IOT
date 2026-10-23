@@ -29,6 +29,24 @@ async function handleMessage(topic: string, message: string): Promise<void> {
   } catch (error) { console.error(`Mensaje MQTT inválido en ${topic}:`, error instanceof Error ? error.message : "error desconocido"); }
 }
 
+/**
+ * Publish a command to a specific node's command topic.
+ * Topic: sila/{deviceId}/cmd
+ * Payload: JSON string, e.g. { "light": "on" }
+ */
+export function publishCommand(deviceId: string, payload: Record<string, unknown>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!client || !client.connected) { reject(new Error("MQTT no está conectado.")); return; }
+    // Tópico unificado: sila/{deviceId}/cmd
+    client.publish(`sila/${deviceId}/cmd`, JSON.stringify(payload), { qos: 1 });
+    // Tópico específico de foco: sila/{deviceId}/cmd/light (compatible con simulador y firmware previo)
+    if (payload.light !== undefined) {
+      client.publish(`sila/${deviceId}/cmd/light`, JSON.stringify({ state: payload.light }), { qos: 1 });
+    }
+    resolve();
+  });
+}
+
 export async function stopMqtt(): Promise<void> {
   if (!client) return;
   await new Promise<void>((resolve, reject) => client!.end(false, {}, (error) => error ? reject(error) : resolve()));

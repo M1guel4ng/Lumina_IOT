@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { Event } from "../models/Event.js";
 import { NodeState } from "../models/NodeState.js";
+import { publishCommand } from "../services/mqttService.js";
 import { addRealtimeClient } from "../services/realtimeService.js";
 
 export async function listNodes(_req: Request, res: Response): Promise<void> {
@@ -49,4 +50,56 @@ export function realtime(req: Request, res: Response): void {
   const remove = addRealtimeClient(res);
   const heartbeat = setInterval(() => res.write(": keep-alive\n\n"), 15000);
   req.on("close", () => { clearInterval(heartbeat); remove(); });
+}
+
+/**
+ * POST /api/nodes/:deviceId/control
+ * Body: { action: "light_on" | "light_off" }
+ * Publishes a command to the node via MQTT.
+ */
+export async function controlNode(req: Request, res: Response): Promise<void> {
+  const deviceId = String(req.params.deviceId);
+  const { action } = req.body as { action?: string };
+
+  const allowed = ["light_on", "light_off"] as const;
+  if (!action || !allowed.includes(action as typeof allowed[number])) {
+    res.status(400).json({ success: false, message: `Acción inválida. Usa: ${allowed.join(", ")}.` });
+    return;
+  }
+
+  const node = await NodeState.findOne({ deviceId }).lean();
+  if (!node) { res.status(404).json({ success: false, message: "Nodo no encontrado." }); return; }
+
+  const lightValue = action === "light_on" ? "on" : "off";
+
+  // 1. Enviar comando por MQTT (tópico unificado y tópico legacy de luz)
+  try {
+    await publishCommand(deviceId, { light: lightValue });
+  } catch (err) {
+    console.warn(`[CONTROL] No se pudo enviar por MQTT:`, err instanceof Error ? err.message : err);
+  }
+
+  // 2. Sincronización HTTP de respaldo para el simulador local (si está activo en puerto 3000)
+  fetch("http://localhost:3000/api/update", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceId, light: lightValue }),
+  }).catch(() => {});
+
+  // 3. Actualizar estado en MongoDB y notificar a los dashboards en tiempo real
+  const now = new Date();
+  const updatedState = await NodeState.findOneAndUpdate(
+    { deviceId },
+    { $set: { light: lightValue, stale: false, lastSeenAt: now } },
+    { returnDocument: "after" }
+  ).lean();
+
+  if (updatedState) {
+    addRealtimeClient; // reference exists
+    import("../services/realtimeService.js").then(({ broadcastRealtime }) => {
+      broadcastRealtime("node-updated", updatedState);
+    });
+  }
+
+  res.json({ success: true, deviceId, action, message: `Comando '${action}' enviado a ${deviceId}.` });
 }

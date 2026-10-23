@@ -106,6 +106,7 @@
         }
         .toggle input:checked + .track { background: #1679ef; }
         .toggle input:checked + .track::after { transform: translateX(18px); }
+        .toggle.toggle-light input:checked + .track { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.4); }
 
         /* Slider */
         input[type=range] {
@@ -248,6 +249,17 @@
             <div class="card-title">${id}</div>
 
             <div class="ctrl">
+                <div class="label">
+                    Luz (Foco)
+                    <span id="txt-light-${id}">Apagado</span>
+                </div>
+                <label class="toggle toggle-light">
+                    <input type="checkbox" id="light-${id}">
+                    <span class="track"></span>
+                </label>
+            </div>
+
+            <div class="ctrl">
                 <div class="label">Presencia</div>
                 <label class="toggle">
                     <input type="checkbox" id="p-${id}">
@@ -265,6 +277,16 @@
         `;
         grid.appendChild(card);
 
+        document.getElementById(`light-${id}`).onchange = e => {
+            const state = e.target.checked ? 'on' : 'off';
+            const lbl = document.getElementById(`txt-light-${id}`);
+            if (lbl) {
+                lbl.textContent = e.target.checked ? 'Encendido' : 'Apagado';
+                lbl.style.color = e.target.checked ? '#f59e0b' : '#9eb5d2';
+            }
+            send(id, { light: state });
+        };
+
         document.getElementById(`p-${id}`).onchange = e =>
             send(id, { presence: e.target.checked });
 
@@ -274,6 +296,39 @@
         document.getElementById(`l-${id}`).onchange = e =>
             send(id, { lightLevel: parseInt(e.target.value) });
     });
+
+    // Sincronizar estado con el servidor (para reflejar comandos recibidos vía MQTT desde el dashboard)
+    async function syncState() {
+        try {
+            const r = await fetch('/api/nodes-state');
+            if (!r.ok) return;
+            const data = await r.json();
+            for (const n of data.nodes) {
+                const lightChk = document.getElementById(`light-${n.deviceId}`);
+                const lightLbl = document.getElementById(`txt-light-${n.deviceId}`);
+                if (lightChk && document.activeElement !== lightChk) {
+                    const isOn = n.light === 'on';
+                    lightChk.checked = isOn;
+                    if (lightLbl) {
+                        lightLbl.textContent = isOn ? 'Encendido' : 'Apagado';
+                        lightLbl.style.color = isOn ? '#f59e0b' : '#9eb5d2';
+                    }
+                }
+                const pChk = document.getElementById(`p-${n.deviceId}`);
+                if (pChk && document.activeElement !== pChk) {
+                    pChk.checked = Boolean(n.presence);
+                }
+                const lSlider = document.getElementById(`l-${n.deviceId}`);
+                const lVal = document.getElementById(`v-${n.deviceId}`);
+                if (lSlider && document.activeElement !== lSlider && n.lightLevel !== undefined) {
+                    lSlider.value = n.lightLevel;
+                    if (lVal) lVal.textContent = n.lightLevel;
+                }
+            }
+        } catch {}
+    }
+    syncState();
+    setInterval(syncState, 1500);
 </script>
 </body>
 </html>

@@ -12,6 +12,7 @@ import {
 } from '../components/DashboardComponents'
 import { NodeLabelEditor, NodeLabelDisplay } from '../components/NodeLabelEditor'
 import { useNodeLabels } from '../hooks/useNodeLabels'
+import { ControlView } from '../components/ControlView'
 import './Dashboard.css'
 
 export function Dashboard() {
@@ -25,6 +26,7 @@ export function Dashboard() {
   const [error, setError] = useState('')
   const [now, setNow] = useState(0)
   const [simpleView, setSimpleView] = useState(false)
+  const [activeSection, setActiveSection] = useState<'dashboard' | 'control'>('dashboard')
   /** deviceId being edited, or null when dialog is closed */
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -125,9 +127,31 @@ export function Dashboard() {
           </div>
         </div>
         <nav aria-label="Navegación principal">
-          <a className="active" href="#dashboard"><b>⌂</b>Dashboard</a>
-          <a href="#summary"><b>◉</b>Sensores</a>
-          <a href="#events"><b>◷</b>Historial</a>
+          <a
+            className={activeSection === 'dashboard' ? 'active' : ''}
+            href="#dashboard"
+            onClick={(e) => { e.preventDefault(); setActiveSection('dashboard') }}
+          >
+            <b>⌂</b>Dashboard
+          </a>
+          <a href="#summary"
+            className={''}
+            onClick={(e) => { if (activeSection !== 'dashboard') { e.preventDefault(); setActiveSection('dashboard') } }}
+          >
+            <b>◉</b>Sensores
+          </a>
+          <a href="#events"
+            onClick={(e) => { if (activeSection !== 'dashboard') { e.preventDefault(); setActiveSection('dashboard') } }}
+          >
+            <b>◷</b>Historial
+          </a>
+          <a
+            className={activeSection === 'control' ? 'active' : ''}
+            href="#control"
+            onClick={(e) => { e.preventDefault(); setActiveSection('control') }}
+          >
+            <b>⏻</b>Control
+          </a>
         </nav>
         <div className="sidebar-footer">
           Iluminación inteligente<br/>para entornos más eficientes<i/>
@@ -194,6 +218,9 @@ export function Dashboard() {
 
         {loading ? (
           <div className="dashboard-empty">Cargando estado de los nodos…</div>
+        ) : activeSection === 'control' ? (
+          /* ══════════════ VISTA CONTROL ══════════════ */
+          <ControlView nodes={nodes} getLabel={getLabel} />
         ) : !selected ? (
           <div className="dashboard-empty">
             <Icon name="chip"/>

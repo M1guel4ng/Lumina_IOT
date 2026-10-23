@@ -30,7 +30,7 @@ app.use(express.json());
  * Solo publica telemetría cuando hay un cambio real → genera evento en backend.
  */
 app.post('/api/update', (req, res) => {
-    const { deviceId, presence, lightLevel } = req.body;
+    const { deviceId, presence, lightLevel, light } = req.body;
 
     if (!deviceId || !nodes[deviceId]) {
         return res.status(400).json({ success: false, message: 'deviceId inválido' });
@@ -46,6 +46,13 @@ app.post('/api/update', (req, res) => {
     if (lightLevel !== undefined && node.lightLevel !== parseInt(lightLevel, 10)) {
         node.lightLevel = parseInt(lightLevel, 10);
         changed = true;
+    }
+    if (light !== undefined) {
+        const normLight = (light === true || light === 'on') ? 'on' : 'off';
+        if (node.light !== normLight) {
+            node.light = normLight;
+            changed = true;
+        }
     }
 
     if (changed) {
@@ -65,7 +72,24 @@ app.get('/api/nodes-state', (_req, res) => {
 
 app.listen(PORT, () => {
     console.log(`[HTTP] Simulador corriendo en http://localhost:${PORT}`);
+    console.log('[CONSOLA] Puedes presionar 1, 2 o 3 + Enter para alternar luz de sim-01, sim-02, sim-03');
 });
+
+// ─── Entrada por consola (Terminal) ───────────────────────────────────────────
+const readline = require('readline');
+try {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.on('line', (line) => {
+        const trimmed = line.trim().toLowerCase();
+        const map = { '1': 'sim-01', '2': 'sim-02', '3': 'sim-03' };
+        const id = map[trimmed] || (DEVICE_IDS.includes(trimmed) ? trimmed : null);
+        if (id && nodes[id]) {
+            nodes[id].light = nodes[id].light === 'on' ? 'off' : 'on';
+            console.log(`[SIM] Luz de ${id} cambiada a: ${nodes[id].light.toUpperCase()}`);
+            publishTelemetry(id);
+        }
+    });
+} catch (_) {}
 
 // ─── Configuración MQTT ───────────────────────────────────────────────────────
 const mqttOptions = {
@@ -82,8 +106,9 @@ client.on('connect', () => {
     // Publicar "online" y suscribirse a comandos para cada nodo
     for (const deviceId of DEVICE_IDS) {
         client.publish(`sila/${deviceId}/status`, 'online', { qos: 1, retain: true });
-        client.subscribe(`sila/${deviceId}/cmd/light`, { qos: 1 });
-        client.subscribe(`sila/${deviceId}/cmd/mode`, { qos: 1 });
+        client.subscribe(`sila/${deviceId}/cmd`, { qos: 1 });          // unified command topic
+        client.subscribe(`sila/${deviceId}/cmd/light`, { qos: 1 });    // legacy
+        client.subscribe(`sila/${deviceId}/cmd/mode`, { qos: 1 });     // legacy
         console.log(`[MQTT] Nodo ${deviceId} registrado y online`);
     }
 
@@ -96,7 +121,25 @@ client.on('connect', () => {
 client.on('message', (topic, message) => {
     console.log(`[MQTT] Mensaje en ${topic}: ${message.toString()}`);
     try {
-        // Extraer deviceId del topic: sila/<deviceId>/cmd/<action>
+        const node_unified = /^sila\/([a-z0-9-]+)\/cmd$/.exec(topic);
+        if (node_unified) {
+            // Unified topic: { light: 'on'|'off' }
+            const deviceId = node_unified[1];
+            const node = nodes[deviceId];
+            if (!node) return;
+            const payload = JSON.parse(message.toString());
+            let changed = false;
+            if (payload.light === 'on' || payload.light === 'off') {
+                if (node.light !== payload.light) { node.light = payload.light; changed = true; }
+            }
+            if (payload.mode === 'auto' || payload.mode === 'manual') {
+                if (node.mode !== payload.mode) { node.mode = payload.mode; changed = true; }
+            }
+            if (changed) publishTelemetry(deviceId);
+            return;
+        }
+
+        // Legacy sub-topics: sila/<deviceId>/cmd/<action>
         const match = /^sila\/([a-z0-9-]+)\/cmd\/(light|mode)$/.exec(topic);
         if (!match) return;
 
@@ -120,7 +163,6 @@ client.on('message', (topic, message) => {
             }
         }
 
-        // Solo publicar telemetría si hubo cambio real
         if (changed) publishTelemetry(deviceId);
 
     } catch (err) {
