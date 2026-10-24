@@ -6,7 +6,7 @@ const app = express();
 const PORT = 3000;
 
 // ─── Definición de nodos ──────────────────────────────────────────────────────
-const DEVICE_IDS = ['sim-01', 'sim-02', 'sim-03'];
+const DEVICE_IDS = ['sim-01', 'sim-02', 'sim-03', 'ESP32-Fisico'];
 
 // Estado inicial de cada nodo
 const nodes = {};
@@ -98,7 +98,7 @@ const mqttOptions = {
     reconnectPeriod: 2000,
 };
 
-const client = mqtt.connect('mqtt://localhost', mqttOptions);
+const client = mqtt.connect('mqtt://broker.hivemq.com', mqttOptions);
 
 client.on('connect', () => {
     console.log('[MQTT] Conectado al broker');
@@ -144,6 +144,7 @@ client.on('message', (topic, message) => {
         if (!match) return;
 
         const deviceId = match[1];
+        if (deviceId === 'ESP32-Fisico') return;
         const action = match[2];
         const node = nodes[deviceId];
         if (!node) return;
@@ -206,6 +207,8 @@ function resetLightTimer(deviceId) {
  */
 function publishTelemetry(deviceId) {
     if (!client.connected) return;
+    if (deviceId === 'ESP32-Fisico') return; 
+    
     const node = nodes[deviceId];
     const payload = { ...node, ts: new Date().toISOString() };
     client.publish(
@@ -225,6 +228,7 @@ function publishTelemetry(deviceId) {
  */
 function publishHeartbeat(deviceId) {
     if (!client.connected) return;
+    if (deviceId === 'ESP32-Fisico') return;
     const node = nodes[deviceId];
     const payload = { deviceId, ts: new Date().toISOString(), uptime: process.uptime() };
     client.publish(
