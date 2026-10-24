@@ -2,15 +2,27 @@ import mqtt, { type MqttClient } from "mqtt";
 import { isTelemetryPayload, processStatus, processTelemetry } from "./nodeStateService.js";
 
 let client: MqttClient | undefined;
+
 export function startMqtt(url: string): MqttClient {
-  client = mqtt.connect(url, { clientId: `lumina-backend-${process.pid}`, clean: true, reconnectPeriod: 2000, connectTimeout: 5000 });
-  client.on("connect", () => {
-    console.log(`MQTT conectado: ${url}`);
-    client?.subscribe(["sila/+/telemetry", "sila/+/status"], { qos: 1 }, (error) => { if (error) console.error("No se pudo suscribir a MQTT:", error.message); });
+  // 1. Una sola conexión forzada a HiveMQ
+  client = mqtt.connect('mqtt://broker.hivemq.com', { 
+    clientId: `lumina-backend-${process.pid}`, 
+    clean: true, 
+    reconnectPeriod: 2000, 
+    connectTimeout: 5000 
   });
-  client.on("reconnect", () => console.log("Reconectando con MQTT..."));
-  client.on("error", (error) => console.error("MQTT:", error.message));
+  
+  client.on("connect", () => {
+    console.log("✅ MQTT conectado a HiveMQ exitosamente");
+    client?.subscribe(["sila/+/telemetry", "sila/+/status"], { qos: 1 }, (error) => { 
+      if (error) console.error("No se pudo suscribir a MQTT:", error.message); 
+    });
+  });
+  
+  client.on("reconnect", () => console.log("⏳ Reconectando con MQTT..."));
+  client.on("error", (error) => console.error("❌ MQTT Error:", error.message));
   client.on("message", (topic, buffer) => void handleMessage(topic, buffer.toString("utf8")));
+  
   return client;
 }
 
