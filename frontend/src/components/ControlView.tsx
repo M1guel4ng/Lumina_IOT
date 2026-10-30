@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { NodeState } from '../services/dashboardService'
 import { controlNode } from '../services/dashboardService'
+import { setNodeMode } from '../services/commandService'
 import { Icon } from './DashboardComponents'
 
 interface ControlCardProps {
@@ -73,6 +74,72 @@ function ControlCard({ node, label }: ControlCardProps) {
           <span className="ctrl-btn-text">
             {sending ? 'Enviando...' : lightOn ? 'Apagar luz' : 'Encender luz'}
           </span>
+        </button>
+      </div>
+
+      {/* ── Selector de Modo ── */}
+      <div style={{ display: 'flex', gap: '8px', width: '100%', marginTop: '4px' }}>
+        <button
+          type="button"
+          style={{
+            flex: 1,
+            padding: '7px 4px',
+            fontSize: '11px',
+            fontWeight: 700,
+            borderRadius: '8px',
+            border: node.mode === 'auto' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+            background: node.mode === 'auto' ? '#eff6ff' : '#ffffff',
+            color: node.mode === 'auto' ? '#1d4ed8' : '#64748b',
+            cursor: !isOnline || sending ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s'
+          }}
+          disabled={!isOnline || sending}
+          onClick={async () => {
+            if (!isOnline || sending) return
+            setSending(true)
+            try {
+              await setNodeMode(node.deviceId, 'auto')
+              setFeedback('ok')
+            } catch {
+              setFeedback('err')
+            } finally {
+              setSending(false)
+              setTimeout(() => setFeedback(null), 2500)
+            }
+          }}
+        >
+          {node.mode === 'auto' ? '✓ Automático (PIR)' : 'Automático (PIR)'}
+        </button>
+        <button
+          type="button"
+          style={{
+            flex: 1,
+            padding: '7px 4px',
+            fontSize: '11px',
+            fontWeight: 700,
+            borderRadius: '8px',
+            border: node.mode === 'manual' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+            background: node.mode === 'manual' ? '#eff6ff' : '#ffffff',
+            color: node.mode === 'manual' ? '#1d4ed8' : '#64748b',
+            cursor: !isOnline || sending ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s'
+          }}
+          disabled={!isOnline || sending}
+          onClick={async () => {
+            if (!isOnline || sending) return
+            setSending(true)
+            try {
+              await setNodeMode(node.deviceId, 'manual')
+              setFeedback('ok')
+            } catch {
+              setFeedback('err')
+            } finally {
+              setSending(false)
+              setTimeout(() => setFeedback(null), 2500)
+            }
+          }}
+        >
+          {node.mode === 'manual' ? '✓ Manual' : 'Manual'}
         </button>
       </div>
 

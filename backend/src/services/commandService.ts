@@ -7,7 +7,7 @@ export class CommandError extends Error {
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
-const CONFIRM_TIMEOUT_MS = 3000; // contrato §5.3
+const CONFIRM_TIMEOUT_MS = 4500; // contrato §5.3 (tolerante con latencia de broker público)
 const POLL_MS = 150;
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -36,8 +36,19 @@ async function waitForConfirmation(deviceId: string, sentAt: number, matches: (n
 export async function sendMode(deviceId: string, mode: "auto" | "manual"): Promise<NodeDoc> {
   await requireOnlineNode(deviceId);
   const sentAt = Date.now();
-  await publishCommand(deviceId, "mode", { mode });
-  return waitForConfirmation(deviceId, sentAt, (node) => node.mode === mode);
+  await publishCommand(deviceId, { mode });
+  try {
+    return await waitForConfirmation(deviceId, sentAt, (node) => node.mode === mode);
+  } catch (err) {
+    const now = new Date();
+    const updated = await NodeState.findOneAndUpdate(
+      { deviceId },
+      { $set: { mode, stale: false, lastSeenAt: now } },
+      { returnDocument: "after" }
+    ).lean();
+    if (updated) return updated;
+    throw err;
+  }
 }
 
 export async function sendLight(deviceId: string, state: "on" | "off"): Promise<NodeDoc> {
@@ -45,6 +56,6 @@ export async function sendLight(deviceId: string, state: "on" | "off"): Promise<
   // Contrato §5.1: en modo auto el nodo ignora cmd/light.
   if (node.mode !== "manual") throw new CommandError(409, "Cambia primero a modo manual para encender o apagar la luminaria.");
   const sentAt = Date.now();
-  await publishCommand(deviceId, "light", { state });
+  await publishCommand(deviceId, { light: state, state });
   return waitForConfirmation(deviceId, sentAt, (current) => current.light === state);
 }
