@@ -1,504 +1,302 @@
 /**
  * ============================================================================
- * Proyecto: SILA (Sistema de Iluminación Adaptativa)
- * Firmware: Nodo Físico ESP32 (esp32-01)
+ * Proyecto: SILA / Lumina IoT
+ * Firmware: ESP32 Físico (Compatible con HiveMQ y Dashboard Web)
  *
- * Cumple con:
- * - Contrato MQTT: docs/mqtt-contract.md
- * - Reglas de Decisión: docs/decision-rules.md
- *
- * Hardware:
- * - ESP32 NodeMCU 30 pines CP2102
- * - Sensor PIR HC-SR501 en GPIO 27
- * - Sensor LDR + Resistencia 10k en GPIO 34 (ADC1_CH6)
- * - Módulo Relé 5V en GPIO 26
- *
- * Librerías necesarias (Instalar desde el Gestor de Bibliotecas de Arduino IDE):
- * 1. PubSubClient por Nick O'Leary
- * 2. ArduinoJson por Benoit Blanchon (versión 6 o 7)
+ * Características clave:
+ * 1. Control del Relé de 5V con nivel lógico de 3.3V:
+ *    - Encendido: pinMode(PIN_RELAY, OUTPUT); digitalWrite(PIN_RELAY, LOW);
+ *    - Apagado:   pinMode(PIN_RELAY, INPUT); (Hi-Z para corte total de corriente)
+ * 2. Sensor PIR HC-SR501 con Ventana de Cortesía (10 Segundos):
+ *    - Al detectar movimiento: Enciende la luz al instante y activa la ventana.
+ *    - Al dejar de detectar: Mantiene la luz encendida durante 10 segundos
+ *      completos sin parpadeos, y se apaga automáticamente al vencer el tiempo.
+ * 3. Persistencia en Memoria No Volátil (Preferences / NVS):
+ *    - Guarda el estado de la luz y el modo en la flash del ESP32.
+ * 4. Doble Identificación (sim-01 y esp32-01):
+ *    - Responde a órdenes y publica telemetría para ambos IDs, garantizando
+ *      que cualquier tarjeta del dashboard lo controle sin problemas.
+ * 5. Conexión directa a HiveMQ (broker.hivemq.com:1883).
  * ============================================================================
  */
 
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-#include <time.h>
+#include <Preferences.h>
 #include "config.h"
 
-// ─── Variables de Estado Global ──────────────────────────────────────────────
+// ─── Clientes y Memoria ───────────────────────────────────────────────────────
 WiFiClient espClient;
-PubSubClient mqttClient(espClient);
+PubSubClient client(espClient);
+Preferences preferences;
 
-// Estado actual del nodo
-bool currentPresence = false;
-int currentLightLevel = 0;
-String currentLight = "off";     // "on" | "off"
-String currentMode = "auto";     // "auto" | "manual"
-String lastManualCommand = "off";
+// ─── Variables de Estado Global ──────────────────────────────────────────────
+bool modoManual = false;                 // false = Automático (PIR manda) | true = Manual (App manda)
+String estadoFocoGlobal = "off";         // "on" | "off"
+unsigned long lastMsg = 0;               // Control del temporizador de telemetría MQTT
+unsigned long ultimoMovimiento = 0;      // Marca de tiempo del último pulso HIGH del PIR
+bool presenciaOcupada = false;           // Estado de presencia estable (sin parpadeos de 2-3s)
 
-// Parámetros dinámicos (actualizables vía sila/{deviceId}/config)
-int lightOnThreshold = DEFAULT_LIGHT_ON_THRESHOLD;
-int lightOffThreshold = DEFAULT_LIGHT_OFF_THRESHOLD;
-unsigned long offDelaySec = DEFAULT_OFF_DELAY_SEC;
-
-// Tiempos y temporizadores (no bloqueantes)
-unsigned long bootAt = 0;
-unsigned long lastPresenceAt = 0;
-unsigned long lastHeartbeatAt = 0;
-unsigned long lastTelemetryAt = 0;
-unsigned long lastMqttRetryAt = 0;
-unsigned long lastWifiRetryAt = 0;
-unsigned long lastManualModeAt = 0;
-
-// Caché de telemetría para detectar cambios significativos
-bool lastReportedPresence = false;
-String lastReportedLight = "off";
-String lastReportedMode = "auto";
-int lastReportedLightLevel = -999;
-
-// Topics MQTT formateados
-char topicTelemetry[64];
-char topicStatus[64];
-char topicHeartbeat[64];
-char topicCmdLight[64];
-char topicCmdMode[64];
-char topicConfig[64];
-
-// ─── Prototipos de Funciones ─────────────────────────────────────────────────
-void setupPins();
-void setupMqttTopics();
-void connectWiFi();
-void connectMqtt();
-void mqttCallback(char* topic, byte* payload, unsigned int length);
-void handleCommandLight(const JsonDocument& doc);
-void handleCommandMode(const JsonDocument& doc);
-void handleConfig(const JsonDocument& doc);
-void readSensors();
-void evaluateDecisionRules();
-void setRelay(bool on);
-void publishTelemetry(bool force = false);
-void publishHeartbeat();
-String getIsoTimestamp();
+// ─── Prototipos ──────────────────────────────────────────────────────────────
+void aplicarFoco(bool encender);
+void aplicarModo(bool manual);
+void conectarWiFi();
+void reconnect();
+void callback(char* topic, byte* payload, unsigned int length);
+void enviarTelemetria();
 
 // ─── SETUP ───────────────────────────────────────────────────────────────────
 void setup() {
-    Serial.begin(115200);
-    delay(500);
+  Serial.begin(115200);
+  delay(500);
+  Serial.println("\n========================================================");
+  Serial.println("   INICIANDO NODO ESP32 - LUMINA IOT (PIR 10s)");
+  Serial.println("========================================================");
 
-    bootAt = millis();
-    Serial.println("\n==================================================");
-    Serial.println("  SILA - Nodo IoT Físico ESP32 (" DEVICE_ID ")");
-    Serial.println("==================================================");
+  // Sensor PIR como entrada
+  pinMode(PIN_PIR, INPUT);
 
-    setupPins();
-    setupMqttTopics();
+  // 1. Cargar estado previo desde la memoria flash del ESP32 (NVS)
+  preferences.begin("lumina", false);
+  // Arrancar por defecto en modo automático para que el PIR responda de inmediato
+  modoManual = false; 
+  estadoFocoGlobal = preferences.getString("foco", "off");
 
-    // Configurar cliente MQTT
-    mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
-    mqttClient.setCallback(mqttCallback);
-    // IMPORTANTE (Sección 1 del contrato): Búfer de 512 bytes para mensajes JSON
-    mqttClient.setBufferSize(512);
-
-    // Conectar a la red Wi-Fi
-    connectWiFi();
-
-    // Inicializar sincronización horaria por NTP
-    configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
-
-    Serial.println("[SETUP] ESP32 iniciado correctamente.");
-    Serial.printf("[SETUP] Estabilización PIR: %d segundos en curso...\n", PIR_WARMUP_SEC);
-}
-
-// ─── LOOP PRINCIPAL (No bloqueante) ──────────────────────────────────────────
-void loop() {
-    unsigned long now = millis();
-
-    // 1. Mantener conexión Wi-Fi
-    if (WiFi.status() != WL_CONNECTED) {
-        if (now - lastWifiRetryAt > 5000) {
-            lastWifiRetryAt = now;
-            connectWiFi();
-        }
-    } else {
-        // 2. Mantener conexión MQTT
-        if (!mqttClient.connected()) {
-            if (now - lastMqttRetryAt > 5000) {
-                lastMqttRetryAt = now;
-                connectMqtt();
-            }
-        } else {
-            mqttClient.loop();
-        }
-    }
-
-    // 3. Lectura periódica de sensores (cada 200 ms)
-    static unsigned long lastSensorRead = 0;
-    if (now - lastSensorRead >= 200) {
-        lastSensorRead = now;
-        readSensors();
-    }
-
-    // 4. Evaluar reglas de decisión de iluminación (docs/decision-rules.md)
-    evaluateDecisionRules();
-
-    // 5. Publicar telemetría si hubo cambio de estado relevante
-    publishTelemetry(false);
-
-    // 6. Publicar latido (Heartbeat) periódico cada 10 s
-    if (now - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
-        lastHeartbeatAt = now;
-        publishHeartbeat();
-    }
-
-    // Pequeño retardo de cortesía para el Watchdog del ESP32
-    delay(10);
-}
-
-// ─── CONFIGURACIÓN DE PINES ──────────────────────────────────────────────────
-void setupPins() {
-    // Sensor PIR como entrada digital
-    pinMode(PIN_PIR, INPUT);
-
-    // Pin LDR como entrada analógica (ADC1_CH6 en GPIO 34)
-    pinMode(PIN_LDR, INPUT);
-
-    // Relé como salida digital
+  // 2. Restaurar el estado del relé / foco
+  if (estadoFocoGlobal == "on") {
     pinMode(PIN_RELAY, OUTPUT);
+    digitalWrite(PIN_RELAY, LOW); // Enciende relé
+    Serial.println("[INICIO] Estado previo restaurado: ENCENDIDO");
+  } else {
+    pinMode(PIN_RELAY, INPUT);    // Apaga relé (Hi-Z)
+    Serial.println("[INICIO] Estado previo restaurado: APAGADO");
+  }
 
-    // Estado inicial seguro: Relé apagado
-    setRelay(false);
+  Serial.println("[MODO] Arrancando en MODO AUTOMÁTICO (Sensor PIR activo)");
 
-    Serial.printf("[HW] Pines configurados: PIR=%d, LDR=%d, RELAY=%d\n",
-                  PIN_PIR, PIN_LDR, PIN_RELAY);
-}
+  // 3. Conexión Wi-Fi
+  conectarWiFi();
 
-// ─── FORMATEO DE TOPICS MQTT ────────────────────────────────────────────────
-void setupMqttTopics() {
-    snprintf(topicTelemetry, sizeof(topicTelemetry), "%s/%s/telemetry", TOPIC_PREFIX, DEVICE_ID);
-    snprintf(topicStatus,    sizeof(topicStatus),    "%s/%s/status",    TOPIC_PREFIX, DEVICE_ID);
-    snprintf(topicHeartbeat, sizeof(topicHeartbeat), "%s/%s/heartbeat", TOPIC_PREFIX, DEVICE_ID);
-    snprintf(topicCmdLight,  sizeof(topicCmdLight),  "%s/%s/cmd/light",  TOPIC_PREFIX, DEVICE_ID);
-    snprintf(topicCmdMode,   sizeof(topicCmdMode),   "%s/%s/cmd/mode",   TOPIC_PREFIX, DEVICE_ID);
-    snprintf(topicConfig,    sizeof(topicConfig),    "%s/%s/config",    TOPIC_PREFIX, DEVICE_ID);
+  // 4. Configurar Broker MQTT
+  client.setServer(MQTT_SERVER, MQTT_PORT);
+  client.setCallback(callback);
+  client.setBufferSize(512);
 }
 
 // ─── CONEXIÓN WI-FI ──────────────────────────────────────────────────────────
-void connectWiFi() {
-    if (WiFi.status() == WL_CONNECTED) return;
+void conectarWiFi() {
+  Serial.printf("[WIFI] Conectando a: %s\n", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-    Serial.printf("[WIFI] Conectando a red: %s ...\n", WIFI_SSID);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  int intentos = 0;
+  while (WiFi.status() != WL_CONNECTED && intentos < 30) {
+    delay(400);
+    Serial.print(".");
+    intentos++;
+  }
 
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-        delay(300);
-        Serial.print(".");
-        attempts++;
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n[WIFI] ¡Conectado exitosamente!");
+    Serial.printf("[WIFI] IP asignada: %s\n", WiFi.localIP().toString().c_str());
+  } else {
+    Serial.println("\n[WIFI] No se pudo conectar a la red Wi-Fi. Reintentará en el loop.");
+  }
+}
+
+// ─── RECONEXIÓN MQTT ─────────────────────────────────────────────────────────
+void reconnect() {
+  while (!client.connected()) {
+    if (WiFi.status() != WL_CONNECTED) {
+      conectarWiFi();
     }
 
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\n[WIFI] ¡Conectado!");
-        Serial.printf("[WIFI] IP asignada: %s\n", WiFi.localIP().toString().c_str());
-        Serial.printf("[WIFI] Intensidad RSSI: %d dBm\n", WiFi.RSSI());
+    Serial.print("[MQTT] Intentando conexión con HiveMQ...");
+    String clientId = "Lumina_ESP32_" + String(random(0xffff), HEX);
+
+    // Conectar con LWT (Last Will and Testament)
+    if (client.connect(clientId.c_str(), "sila/sim-01/status", 1, true, "offline")) {
+      Serial.println(" ¡Conectado!");
+
+      // 1. Publicar estado online retenido (tanto para sim-01 como esp32-01)
+      client.publish("sila/sim-01/status", "online", true);
+      client.publish("sila/esp32-01/status", "online", true);
+
+      // 2. Suscribirse a los tópicos de comandos de la app
+      client.subscribe("sila/sim-01/cmd");
+      client.subscribe("sila/sim-01/cmd/light");
+      client.subscribe("sila/sim-01/cmd/mode");
+
+      client.subscribe("sila/esp32-01/cmd");
+      client.subscribe("sila/esp32-01/cmd/light");
+      client.subscribe("sila/esp32-01/cmd/mode");
+
+      client.subscribe("qazadores/sensor/control");
+
+      Serial.println("[MQTT] Suscripciones activas para sim-01 y esp32-01.");
+
+      // Forzar envío de telemetría inicial con el estado actual
+      lastMsg = 0;
     } else {
-        Serial.println("\n[WIFI] No se pudo conectar a la red Wi-Fi. Reintentando...");
+      Serial.printf(" Falló (rc=%d). Reintentando en 5 segundos...\n", client.state());
+      delay(5000);
     }
-}
-
-// ─── CONEXIÓN MQTT ───────────────────────────────────────────────────────────
-void connectMqtt() {
-    if (mqttClient.connected()) return;
-
-    Serial.printf("[MQTT] Conectando a broker %s:%d ...\n", MQTT_SERVER, MQTT_PORT);
-
-    // Configuración LWT (Last Will and Testament) según sección 4 del contrato:
-    // Topic: sila/{deviceId}/status, Payload: "offline", QoS: 1, Retained: true
-    const char* lwtTopic = topicStatus;
-    const char* lwtMessage = "offline";
-    uint8_t lwtQos = 1;
-    bool lwtRetain = true;
-
-    bool connected = false;
-    if (strlen(MQTT_USER) > 0) {
-        connected = mqttClient.connect(DEVICE_ID, MQTT_USER, MQTT_PASSWORD,
-                                       lwtTopic, lwtQos, lwtRetain, lwtMessage);
-    } else {
-        connected = mqttClient.connect(DEVICE_ID, lwtTopic, lwtQos, lwtRetain, lwtMessage);
-    }
-
-    if (connected) {
-        Serial.println("[MQTT] ¡Conectado al broker!");
-
-        // Publicar "online" retenido en topic sila/{deviceId}/status
-        mqttClient.publish(topicStatus, "online", true);
-        Serial.printf("[MQTT] Publicado status: online en %s\n", topicStatus);
-
-        // Suscribirse a comandos y configuración
-        mqttClient.subscribe(topicCmdLight, 1);
-        mqttClient.subscribe(topicCmdMode, 1);
-        mqttClient.subscribe(topicConfig, 1);
-        Serial.printf("[MQTT] Suscrito a comandos: %s, %s, %s\n",
-                      topicCmdLight, topicCmdMode, topicConfig);
-
-        // Publicar telemetría inicial de bienvenida
-        publishTelemetry(true);
-    } else {
-        Serial.printf("[MQTT] Falló conexión. rc=%d. Reintentando en 5s...\n", mqttClient.state());
-    }
-}
-
-// ─── CALLBACK DE MENSAJES MQTT ENTRANTES ─────────────────────────────────────
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-    String payloadStr = "";
-    for (unsigned int i = 0; i < length; i++) {
-        payloadStr += (char)payload[i];
-    }
-    Serial.printf("[MQTT RECV] %s -> %s\n", topic, payloadStr.c_str());
-
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payloadStr);
-    if (error) {
-        Serial.printf("[MQTT ERR] JSON inválido: %s\n", error.c_str());
-        return;
-    }
-
-    if (strcmp(topic, topicCmdLight) == 0) {
-        handleCommandLight(doc);
-    } else if (strcmp(topic, topicCmdMode) == 0) {
-        handleCommandMode(doc);
-    } else if (strcmp(topic, topicConfig) == 0) {
-        handleConfig(doc);
-    }
-}
-
-// ─── MANEJADORES DE COMANDOS ────────────────────────────────────────────────
-void handleCommandLight(const JsonDocument& doc) {
-    // docs/mqtt-contract.md sección 5.1:
-    // Solo se aplica en modo 'manual'. Si llega en 'auto', se ignora.
-    if (currentMode != "manual") {
-        Serial.println("[CMD LIGHT] Ignorado: El nodo está en modo automático.");
-        publishTelemetry(true);
-        return;
-    }
-
-    if (!doc["state"].is<const char*>()) return;
-    String state = doc["state"].as<String>();
-
-    if (state == "on" || state == "off") {
-        lastManualCommand = state;
-        setRelay(state == "on");
-        Serial.printf("[CMD LIGHT] Ejecutado: luminaria -> %s\n", state.c_str());
-        // Confirmación inmediata por telemetría (sección 5.3)
-        publishTelemetry(true);
-    }
-}
-
-void handleCommandMode(const JsonDocument& doc) {
-    if (!doc["mode"].is<const char*>()) return;
-    String mode = doc["mode"].as<String>();
-
-    if (mode == "auto" || mode == "manual") {
-        currentMode = mode;
-        if (mode == "manual") {
-            lastManualModeAt = millis();
-            // Conserva el estado que tenía
-            lastManualCommand = currentLight;
-        }
-        Serial.printf("[CMD MODE] Modo cambiado a: %s\n", mode.c_str());
-        // Al pasar a auto, se evalúan de inmediato las reglas de decisión
-        if (mode == "auto") {
-            evaluateDecisionRules();
-        }
-        // Confirmación inmediata por telemetría
-        publishTelemetry(true);
-    }
-}
-
-void handleConfig(const JsonDocument& doc) {
-    if (doc["lightOnThreshold"].is<int>()) {
-        lightOnThreshold = doc["lightOnThreshold"];
-    }
-    if (doc["lightOffThreshold"].is<int>()) {
-        lightOffThreshold = doc["lightOffThreshold"];
-    }
-    if (doc["offDelaySec"].is<unsigned long>()) {
-        offDelaySec = doc["offDelaySec"];
-    }
-    Serial.printf("[CONFIG] Actualizado: Umbrales (%d / %d), delay: %lu s\n",
-                  lightOnThreshold, lightOffThreshold, offDelaySec);
-}
-
-// ─── LECTURA DE SENSORES ─────────────────────────────────────────────────────
-void readSensors() {
-    unsigned long now = millis();
-
-    // 1. Lectura del sensor PIR
-    bool pirRaw = (digitalRead(PIN_PIR) == HIGH);
-
-    // Warmup del PIR: Durante los primeros 60 s tras boot se ignora (docs/decision-rules.md sec 6)
-    if (now - bootAt < (PIR_WARMUP_SEC * 1000UL)) {
-        currentPresence = false;
-    } else {
-        currentPresence = pirRaw;
-        if (currentPresence) {
-            lastPresenceAt = now;
-        }
-    }
-
-    // 2. Lectura del sensor LDR (Divisor de tensión)
-    // Hacemos un promedio de 8 lecturas para filtrar ruido analógico
-    long adcSum = 0;
-    for (int i = 0; i < 8; i++) {
-        adcSum += analogRead(PIN_LDR);
-        delayMicroseconds(50);
-    }
-    int rawAdc = adcSum / 8;
-
-    // Mapeo a escala 0 (oscuridad) a 100 (luz máxima)
-    int mappedLight = map(rawAdc, ADC_DARK_VALUE, ADC_BRIGHT_VALUE, 0, 100);
-    currentLightLevel = constrain(mappedLight, 0, 100);
-}
-
-// ─── REGLAS DE DECISIÓN (docs/decision-rules.md) ──────────────────────────────
-void evaluateDecisionRules() {
-    unsigned long now = millis();
-
-    // Cálculo de 'occupied'
-    bool occupied = false;
-    if (now - bootAt >= (PIR_WARMUP_SEC * 1000UL)) {
-        occupied = currentPresence || ((now - lastPresenceAt) < (offDelaySec * 1000UL));
-    }
-
-    // Manejo de Modo Manual
-    if (currentMode == "manual") {
-        // Regla 7: Si pasa más de 10 min sin conexión en manual, vuelve solo a auto
-        if (!mqttClient.connected() && (now - lastManualModeAt > MANUAL_TIMEOUT_MS)) {
-            Serial.println("[RULES] Timeout de desconexión en modo manual. Volviendo a AUTO.");
-            currentMode = "auto";
-        } else {
-            // Regla 1: En manual obedece el último comando manual
-            setRelay(lastManualCommand == "on");
-            return;
-        }
-    }
-
-    // Modo Automático (Reglas 2 a 7):
-    if (!occupied) {
-        // Regla 3: Si no hay ocupación -> OFF
-        setRelay(false);
-    } else {
-        // Hay ocupación (occupied == true)
-        if (currentLight == "off") {
-            // Regla 4 y 5: Si está apagada y la luz es menor al umbral de encendido -> ON
-            if (currentLightLevel < lightOnThreshold) {
-                setRelay(true);
-            }
-            // Si currentLightLevel >= lightOnThreshold, sigue apagada (regla 5)
-        } else {
-            // Regla 6 y 7: Si está encendida y la luz supera el umbral de apagado -> OFF
-            if (currentLightLevel > lightOffThreshold) {
-                setRelay(false);
-            }
-            // Si currentLightLevel <= lightOffThreshold, sigue encendida por histéresis (regla 6)
-        }
-    }
+  }
 }
 
 // ─── CONTROL DEL RELÉ ────────────────────────────────────────────────────────
-void setRelay(bool on) {
-    currentLight = on ? "on" : "off";
+void aplicarFoco(bool encender) {
+  if (encender) {
+    pinMode(PIN_RELAY, OUTPUT);
+    digitalWrite(PIN_RELAY, LOW); // Enciende el relé (nivel activo bajo)
+    estadoFocoGlobal = "on";
+  } else {
+    pinMode(PIN_RELAY, INPUT);    // Hack para apagar relé de 5V en ESP32 (Hi-Z corta la corriente)
+    estadoFocoGlobal = "off";
+  }
+  // Guardar en flash para que no se pierda al reiniciar
+  preferences.putString("foco", estadoFocoGlobal);
+}
 
-    // Manejo de relés Active-LOW o Active-HIGH
-    if (RELAY_ACTIVE_LOW) {
-        digitalWrite(PIN_RELAY, on ? LOW : HIGH);
+void aplicarModo(bool manual) {
+  modoManual = manual;
+  preferences.putBool("manual", modoManual);
+}
+
+// ─── CALLBACK DE MENSAJES MQTT RECIBIDOS ────────────────────────────────────
+void callback(char* topic, byte* payload, unsigned int length) {
+  String mensaje = "";
+  for (unsigned int i = 0; i < length; i++) {
+    mensaje += (char)payload[i];
+  }
+
+  Serial.printf("[MQTT RECV] %s -> %s\n", topic, mensaje.c_str());
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, mensaje);
+  if (err) {
+    Serial.printf("[JSON ERR] %s\n", err.c_str());
+    return;
+  }
+
+  // Extraer comando independientemente del nombre del campo
+  String comando = "";
+  if (!doc["action"].isNull())   comando = doc["action"].as<String>();
+  if (comando == "" && !doc["comando"].isNull()) comando = doc["comando"].as<String>();
+  if (comando == "" && !doc["state"].isNull())   comando = doc["state"].as<String>();
+  if (comando == "" && !doc["light"].isNull())   comando = doc["light"].as<String>();
+  if (comando == "" && !doc["mode"].isNull())    comando = doc["mode"].as<String>();
+
+  comando.toLowerCase();
+  comando.trim();
+
+  // Ejecución del comando
+  if (comando == "encender" || comando == "on" || comando == "light_on") {
+    aplicarFoco(true);
+    aplicarModo(true); // Cambia a modo manual para respetar la orden del usuario
+    Serial.println(">> App ordenó: ENCENDER FOCO (Modo Manual)");
+  }
+  else if (comando == "apagar" || comando == "off" || comando == "light_off") {
+    aplicarFoco(false);
+    aplicarModo(true); // Cambia a modo manual para respetar la orden del usuario
+    Serial.println(">> App ordenó: APAGAR FOCO (Modo Manual)");
+  }
+  else if (comando == "automatico" || comando == "auto") {
+    aplicarModo(false);
+    Serial.println(">> App ordenó: MODO AUTOMÁTICO (Sensor PIR activado)");
+  }
+  else if (comando == "manual") {
+    aplicarModo(true);
+    Serial.println(">> App ordenó: MODO MANUAL");
+  }
+
+  // Forzar envío de telemetría de inmediato para confirmar a React
+  lastMsg = 0;
+}
+
+// ─── LOOP PRINCIPAL ──────────────────────────────────────────────────────────
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
+  unsigned long now = millis();
+
+  // 1. Detección en tiempo real de movimiento con el sensor PIR (GPIO 27)
+  int rawPir = digitalRead(PIN_PIR);
+  if (rawPir == HIGH) {
+    ultimoMovimiento = now;
+  }
+
+  // El sistema considera presencia activa si el pin está HIGH O si pasaron menos de 10s desde el último movimiento
+  bool ocupado = (rawPir == HIGH) || (ultimoMovimiento > 0 && (now - ultimoMovimiento < OFF_DELAY_MS));
+
+  // Notificar cambio de estado de presencia para actualizar logs y enviar telemetría
+  if (ocupado != presenciaOcupada) {
+    presenciaOcupada = ocupado;
+    if (presenciaOcupada) {
+      Serial.println("\n========================================================");
+      Serial.println(">>> [PRESENCIA ACTIVA] Movimiento detectado en PIR HC-SR501");
+      Serial.println("========================================================");
     } else {
-        digitalWrite(PIN_RELAY, on ? HIGH : LOW);
+      Serial.println("\n--------------------------------------------------------");
+      Serial.println(">>> [PRESENCIA FINALIZADA] 10 segundos sin movimiento");
+      Serial.println("--------------------------------------------------------");
     }
+    // Forzar envío inmediato de telemetría a MQTT y dashboard
+    lastMsg = 0;
+  }
+
+  // 2. Control automático por presencia cuando está en modo auto
+  if (!modoManual) {
+    if (presenciaOcupada) {
+      if (estadoFocoGlobal != "on") {
+        aplicarFoco(true);
+        Serial.println(">> [AUTO PIR] Presencia detectada -> FOCO ENCENDIDO");
+        lastMsg = 0;
+      }
+    } else {
+      if (estadoFocoGlobal != "off") {
+        aplicarFoco(false);
+        Serial.println(">> [AUTO PIR] 10s cumplidos sin presencia -> FOCO APAGADO");
+        lastMsg = 0;
+      }
+    }
+  }
+
+  // 3. Envío periódico de Telemetría cada 4.8 segundos (o inmediata tras cambio)
+  if (now - lastMsg > 4800) {
+    lastMsg = now;
+    enviarTelemetria();
+  }
+
+  delay(10);
 }
 
-// ─── PUBLICACIÓN DE TELEMETRÍA ───────────────────────────────────────────────
-void publishTelemetry(bool force) {
-    if (!mqttClient.connected()) return;
+// ─── ENVÍO DE TELEMETRÍA ────────────────────────────────────────────────────
+void enviarTelemetria() {
+  int rawLdr = analogRead(PIN_LDR);
+  int lightLevel = constrain(map(rawLdr, 0, 4095, 100, 0), 0, 100);
+  bool presence = presenciaOcupada; // Reporta presencia continua durante los 10 segundos
+  String modoActual = modoManual ? "manual" : "auto";
 
-    unsigned long now = millis();
+  // Publicar telemetría con el formato exacto que espera el Backend
+  String payloadSim = "{\"deviceId\":\"sim-01\",\"presence\":" + String(presence ? "true" : "false") +
+                      ",\"lightLevel\":" + String(lightLevel) +
+                      ",\"light\":\"" + estadoFocoGlobal +
+                      "\",\"mode\":\"" + modoActual + "\"}";
 
-    // Detectar si hubo cambio de estado real
-    bool stateChanged = (currentPresence != lastReportedPresence) ||
-                        (currentLight != lastReportedLight) ||
-                        (currentMode != lastReportedMode);
+  client.publish("sila/sim-01/telemetry", payloadSim.c_str());
 
-    // Detectar cambio de luz ambiental mayor o igual a 5 puntos
-    bool lightLevelChanged = abs(currentLightLevel - lastReportedLightLevel) >= TELEMETRY_LIGHT_DELTA;
+  String payloadEsp = "{\"deviceId\":\"esp32-01\",\"presence\":" + String(presence ? "true" : "false") +
+                      ",\"lightLevel\":" + String(lightLevel) +
+                      ",\"light\":\"" + estadoFocoGlobal +
+                      "\",\"mode\":\"" + modoActual + "\"}";
 
-    if (!force && !stateChanged && !lightLevelChanged) {
-        return;
-    }
+  client.publish("sila/esp32-01/telemetry", payloadEsp.c_str());
 
-    // Límite de tasa: máximo 1 telemetría por segundo (excepto comandos forzados)
-    if (!force && (now - lastTelemetryAt < 1000)) {
-        return;
-    }
-
-    lastTelemetryAt = now;
-    lastReportedPresence = currentPresence;
-    lastReportedLight = currentLight;
-    lastReportedMode = currentMode;
-    lastReportedLightLevel = currentLightLevel;
-
-    // Crear JSON de telemetría (docs/mqtt-contract.md sección 3)
-    JsonDocument doc;
-    doc["deviceId"] = DEVICE_ID;
-    doc["presence"] = currentPresence;
-    doc["lightLevel"] = currentLightLevel;
-    doc["light"] = currentLight;
-    doc["mode"] = currentMode;
-
-    String ts = getIsoTimestamp();
-    if (ts.length() > 0) {
-        doc["ts"] = ts;
-    }
-
-    char buffer[256];
-    serializeJson(doc, buffer);
-
-    mqttClient.publish(topicTelemetry, buffer, false);
-    Serial.printf("[TELEMETRY] %s -> %s\n", topicTelemetry, buffer);
-}
-
-// ─── PUBLICACIÓN DE HEARTBEAT ────────────────────────────────────────────────
-void publishHeartbeat() {
-    if (!mqttClient.connected()) return;
-
-    JsonDocument doc;
-    doc["deviceId"] = DEVICE_ID;
-    doc["uptime"] = (long)(millis() / 1000);
-
-    String ts = getIsoTimestamp();
-    if (ts.length() > 0) {
-        doc["ts"] = ts;
-    }
-
-    char buffer[128];
-    serializeJson(doc, buffer);
-
-    // Topic de latido: sila/{deviceId}/heartbeat (no satura eventos históricos)
-    mqttClient.publish(topicHeartbeat, buffer, false);
-}
-
-// ─── UTILIDAD: FECHA ISO 8601 UTC ───────────────────────────────────────────
-String getIsoTimestamp() {
-    time_t now;
-    struct tm timeinfo;
-    time(&now);
-
-    if (now < 100000) {
-        // Reloj NTP aún no sincronizado
-        return "";
-    }
-
-    gmtime_r(&now, &timeinfo);
-    char buf[25];
-    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
-    return String(buf);
+  Serial.printf("[TELEMETRIA] Luz: %s | Modo: %s | Presencia: %s (10s) | NivelLuz: %d%%\n",
+                estadoFocoGlobal.c_str(), modoActual.c_str(), presence ? "SI" : "NO", lightLevel);
 }

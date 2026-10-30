@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { CommandError, sendLight, sendMode } from "../services/commandService.js";
 
-const DEVICE_ID = /^[a-z0-9-]+$/;
+const DEVICE_ID = /^[a-z0-9-_]+$/i;
 
 function fail(res: Response, error: unknown): void {
   if (error instanceof CommandError) { res.status(error.status).json({ success: false, message: error.message }); return; }

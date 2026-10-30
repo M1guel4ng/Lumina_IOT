@@ -14,7 +14,7 @@ export function startMqtt(url: string): MqttClient {
 
   client.on("connect", () => {
     console.log("✅ MQTT conectado a HiveMQ exitosamente");
-    client?.subscribe(["sila/+/telemetry", "sila/+/status"], { qos: 1 }, (error) => {
+    client?.subscribe(["sila/+/telemetry", "sila/+/status", "sila/+/heartbeat"], { qos: 1 }, (error) => {
       if (error) console.error("No se pudo suscribir a MQTT:", error.message);
     });
   });
