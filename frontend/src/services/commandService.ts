@@ -14,7 +14,7 @@ async function post(path: string, body: object): Promise<void> {
   throw new Error(response.status === 401 ? 'Tu sesión expiró.' : data?.message ?? 'No se pudo enviar el comando.')
 }
 
-export const setNodeMode = (deviceId: string, mode: 'auto' | 'manual') =>
+export const setNodeMode = (deviceId: string, mode: 'auto' | 'manual' | 'pir' | 'ldr') =>
   post(`/api/nodes/${encodeURIComponent(deviceId)}/mode`, { mode })
 
 export const setNodeLight = (deviceId: string, state: 'on' | 'off') =>

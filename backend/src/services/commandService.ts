@@ -33,7 +33,7 @@ async function waitForConfirmation(deviceId: string, sentAt: number, matches: (n
   throw new CommandError(504, "El nodo no confirmó el comando a tiempo.");
 }
 
-export async function sendMode(deviceId: string, mode: "auto" | "manual"): Promise<NodeDoc> {
+export async function sendMode(deviceId: string, mode: "auto" | "manual" | "pir" | "ldr"): Promise<NodeDoc> {
   await requireOnlineNode(deviceId);
   const sentAt = Date.now();
   await publishCommand(deviceId, { mode });

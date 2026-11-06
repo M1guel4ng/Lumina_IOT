@@ -2,12 +2,12 @@ import { Event } from "../models/Event.js";
 import { NodeState } from "../models/NodeState.js";
 import { broadcastRealtime } from "./realtimeService.js";
 
-export interface TelemetryPayload { deviceId: string; presence: boolean; lightLevel: number; light: "on" | "off"; mode: "auto" | "manual"; ts?: string; }
+export interface TelemetryPayload { deviceId: string; presence: boolean; lightLevel: number; light: "on" | "off"; mode: "auto" | "manual" | "pir" | "ldr"; ts?: string; }
 
 export function isTelemetryPayload(value: unknown, topicDeviceId: string): value is TelemetryPayload {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return item.deviceId === topicDeviceId && typeof item.presence === "boolean" && Number.isInteger(item.lightLevel) && Number(item.lightLevel) >= 0 && Number(item.lightLevel) <= 100 && ["on", "off"].includes(String(item.light)) && ["auto", "manual"].includes(String(item.mode));
+  return item.deviceId === topicDeviceId && typeof item.presence === "boolean" && Number.isInteger(item.lightLevel) && Number(item.lightLevel) >= 0 && Number(item.lightLevel) <= 100 && ["on", "off"].includes(String(item.light)) && ["auto", "manual", "pir", "ldr"].includes(String(item.mode));
 }
 
 export async function processTelemetry(payload: TelemetryPayload): Promise<void> {

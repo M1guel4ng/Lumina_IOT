@@ -5,7 +5,7 @@ const nodeStateSchema = new Schema({
   presence: { type: Boolean, default: null },
   lightLevel: { type: Number, min: 0, max: 100, default: null },
   light: { type: String, enum: ["on", "off", null], default: null },
-  mode: { type: String, enum: ["auto", "manual", null], default: null },
+  mode: { type: String, enum: ["auto", "manual", "pir", "ldr", null], default: null },
   status: { type: String, enum: ["online", "offline"], default: "offline", required: true },
   stale: { type: Boolean, default: true, required: true },
   lastSeenAt: { type: Date, default: null },
