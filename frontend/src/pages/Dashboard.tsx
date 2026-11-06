@@ -250,7 +250,7 @@ export function Dashboard() {
                 value={selected.light == null ? 'Sin datos' : selected.light === 'on' ? 'Encendida' : 'Apagada'}
                 tone="amber" stale={selected.stale}/>
               <Metric icon="mode" label="Modo"
-                value={selected.mode == null ? 'Sin datos' : selected.mode === 'auto' ? 'Automático' : 'Manual'}
+                value={selected.mode == null ? 'Sin datos' : selected.mode === 'manual' ? 'Manual' : selected.mode === 'ldr' ? 'Modo LDR' : 'Modo PIR'}
                 tone="blue" stale={selected.stale}/>
               <Metric icon="wifi" label="Conexión"
                 value={selected.status === 'online' ? 'MQTT conectado' : 'MQTT desconectado'}
@@ -308,7 +308,7 @@ export function Dashboard() {
                       value={selected.light == null ? 'Sin datos' : selected.light === 'on' ? 'Encendida' : 'Apagada'}
                       tone="amber" stale={selected.stale}/>
                     <Metric icon="mode" label="Modo"
-                      value={selected.mode == null ? 'Sin datos' : selected.mode === 'auto' ? 'Automático' : 'Manual'}
+                      value={selected.mode == null ? 'Sin datos' : selected.mode === 'manual' ? 'Manual' : selected.mode === 'ldr' ? 'Modo LDR' : 'Modo PIR'}
                       tone="blue" stale={selected.stale}/>
                     <Metric icon="wifi" label="Conexión"
                       value={selected.status === 'online' ? 'MQTT conectado' : 'MQTT desconectado'}

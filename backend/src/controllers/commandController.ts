@@ -9,13 +9,17 @@ function fail(res: Response, error: unknown): void {
   res.status(502).json({ success: false, message: "No se pudo enviar el comando al nodo." });
 }
 
-/** POST /api/nodes/:deviceId/mode   body: { "mode": "auto" | "manual" } */
+/** POST /api/nodes/:deviceId/mode   body: { "mode": "manual" | "pir" | "ldr" | "auto" } */
 export async function setMode(req: Request, res: Response): Promise<void> {
   const deviceId = String(req.params.deviceId);
   const mode: unknown = req.body?.mode;
   if (!DEVICE_ID.test(deviceId)) { res.status(400).json({ success: false, message: "deviceId inválido." }); return; }
-  if (mode !== "auto" && mode !== "manual") { res.status(400).json({ success: false, message: "mode debe ser 'auto' o 'manual'." }); return; }
-  try { res.json(await sendMode(deviceId, mode)); } catch (error) { fail(res, error); }
+  const validModes = ["manual", "pir", "ldr", "auto"];
+  if (typeof mode !== "string" || !validModes.includes(mode)) {
+    res.status(400).json({ success: false, message: "mode debe ser 'manual', 'pir' o 'ldr'." });
+    return;
+  }
+  try { res.json(await sendMode(deviceId, mode as "manual" | "pir" | "ldr" | "auto")); } catch (error) { fail(res, error); }
 }
 
 /** POST /api/nodes/:deviceId/light   body: { "state": "on" | "off" }  (solo en modo manual) */

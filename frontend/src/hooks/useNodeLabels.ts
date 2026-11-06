@@ -2,6 +2,11 @@ import { useCallback, useState } from 'react'
 
 const STORAGE_KEY = 'lumina_node_labels'
 
+const DEFAULT_LABELS: Record<string, string> = {
+  'sim-01': 'Nodo 1 (Relé / Foco)',
+  'sim-02': 'Nodo 2 (LED 2)',
+}
+
 function loadLabels(): Record<string, string> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -28,7 +33,7 @@ export function useNodeLabels(): UseNodeLabels {
   const [labels, setLabels] = useState<Record<string, string>>(loadLabels)
 
   const getLabel = useCallback(
-    (deviceId: string) => labels[deviceId]?.trim() || deviceId,
+    (deviceId: string) => labels[deviceId]?.trim() || DEFAULT_LABELS[deviceId] || deviceId,
     [labels],
   )
 

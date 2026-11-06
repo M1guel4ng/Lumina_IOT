@@ -1,7 +1,7 @@
 import { getToken } from './authService'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-export interface NodeState { _id?: string; deviceId: string; presence: boolean | null; lightLevel: number | null; light: 'on' | 'off' | null; mode: 'auto' | 'manual' | null; status: 'online' | 'offline'; stale: boolean; lastSeenAt: string | null; lastTelemetryAt: string | null }
+export interface NodeState { _id?: string; deviceId: string; presence: boolean | null; lightLevel: number | null; light: 'on' | 'off' | null; mode: 'auto' | 'manual' | 'pir' | 'ldr' | null; status: 'online' | 'offline'; stale: boolean; lastSeenAt: string | null; lastTelemetryAt: string | null }
 export interface NodeEvent { _id: string; deviceId: string; type: 'presence' | 'lightLevel' | 'light' | 'mode' | 'connection'; value: boolean | number | string; source: 'node' | 'system' | 'web'; timestamp: string }
 export interface RealtimeMessage { event: 'node-updated' | 'node-online' | 'node-offline'; data: NodeState }
 

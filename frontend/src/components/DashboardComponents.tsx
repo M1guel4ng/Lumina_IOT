@@ -89,7 +89,6 @@ export function SimpleView({ selected, now, label, rawLabel, onEditLabel }: Simp
   const isOnline = selected.status === 'online'
   const hasPresence = selected.presence === true
   const lightOn = selected.light === 'on'
-  const isAuto = selected.mode === 'auto'
 
   const rows: { icon: string; label: string; value: string; tone: string }[] = [
     {
@@ -125,7 +124,7 @@ export function SimpleView({ selected, now, label, rawLabel, onEditLabel }: Simp
     {
       icon: 'mode',
       label: 'Modo',
-      value: selected.mode == null ? 'Sin datos' : isAuto ? 'Automático' : 'Manual',
+      value: selected.mode == null ? 'Sin datos' : selected.mode === 'manual' ? 'Manual' : selected.mode === 'ldr' ? 'Modo LDR' : 'Modo PIR',
       tone: 'blue',
     },
     {
