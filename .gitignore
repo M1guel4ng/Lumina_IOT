@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment variables
+.env
+*.env
+!.env.example
+
+# Build outputs & caches
+dist/
+build/
+.pio/build/
+.pio/libdeps/
+*.log
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

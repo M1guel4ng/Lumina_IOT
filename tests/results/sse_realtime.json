@@ -1,0 +1,16 @@
+{
+  "test": "sse_realtime",
+  "timestamp": "2026-11-14T22:38:55.351Z",
+  "sseConnectTimeMs": 1515.9,
+  "iterations": 20,
+  "received": 20,
+  "missed": 0,
+  "missedPct": 0,
+  "latency_ms": {
+    "min": 137.6,
+    "avg": 533.77,
+    "p50": 575.79,
+    "p95": 826.35,
+    "max": 826.35
+  }
+}

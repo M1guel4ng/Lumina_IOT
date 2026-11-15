@@ -1,0 +1,110 @@
+{
+  "test": "api_latency",
+  "timestamp": "2026-11-14T22:36:05.483Z",
+  "server": "http://localhost:3001",
+  "iterations": 50,
+  "results": [
+    {
+      "endpoint": "GET /api/health",
+      "method": "GET",
+      "path": "/api/health",
+      "success": 50,
+      "total": 50,
+      "successPct": "100.0",
+      "latency_ms": {
+        "min": 1.1,
+        "avg": 2.42,
+        "p50": 2.41,
+        "p95": 3.83,
+        "p99": 4.28,
+        "max": 4.28,
+        "stddev": 0.78
+      }
+    },
+    {
+      "endpoint": "POST /api/auth/login",
+      "method": "POST",
+      "path": "/api/auth/login",
+      "success": 50,
+      "total": 50,
+      "successPct": "100.0",
+      "latency_ms": {
+        "min": 574.79,
+        "avg": 616.22,
+        "p50": 609.89,
+        "p95": 664.21,
+        "p99": 706.68,
+        "max": 706.68,
+        "stddev": 27.21
+      }
+    },
+    {
+      "endpoint": "GET /api/nodes",
+      "method": "GET",
+      "path": "/api/nodes",
+      "success": 50,
+      "total": 50,
+      "successPct": "100.0",
+      "latency_ms": {
+        "min": 227.14,
+        "avg": 260.79,
+        "p50": 247.29,
+        "p95": 308.57,
+        "p99": 610.93,
+        "max": 610.93,
+        "stddev": 56.96
+      }
+    },
+    {
+      "endpoint": "GET /api/nodes/sim-01",
+      "method": "GET",
+      "path": "/api/nodes/sim-01",
+      "success": 50,
+      "total": 50,
+      "successPct": "100.0",
+      "latency_ms": {
+        "min": 227.44,
+        "avg": 251.48,
+        "p50": 238.49,
+        "p95": 329.83,
+        "p99": 415.91,
+        "max": 415.91,
+        "stddev": 34.2
+      }
+    },
+    {
+      "endpoint": "GET /api/events (10)",
+      "method": "GET",
+      "path": "/api/events?limit=10",
+      "success": 50,
+      "total": 50,
+      "successPct": "100.0",
+      "latency_ms": {
+        "min": 228.36,
+        "avg": 248.2,
+        "p50": 231.44,
+        "p95": 317.3,
+        "p99": 421.5,
+        "max": 421.5,
+        "stddev": 35.24
+      }
+    },
+    {
+      "endpoint": "GET /api/state",
+      "method": "GET",
+      "path": "/api/state",
+      "success": 50,
+      "total": 50,
+      "successPct": "100.0",
+      "latency_ms": {
+        "min": 224.46,
+        "avg": 257.24,
+        "p50": 229.69,
+        "p95": 438.86,
+        "p99": 449.35,
+        "max": 449.35,
+        "stddev": 62.38
+      }
+    }
+  ]
+}

@@ -93,7 +93,7 @@ function ControlCard({ node, label, globalMode }: ControlCardProps) {
             gap: '6px'
           }}>
             <span></span>
-            <span>Control por PIR (10s de apagado)</span>
+            <span>Control por PIR</span>
           </div>
         ) : (
           <div style={{
