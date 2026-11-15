@@ -1,0 +1,74 @@
+{
+  "test": "resource_usage",
+  "timestamp": "2026-11-14T22:41:02.679Z",
+  "baseline": {
+    "label": "reposo",
+    "timestamp": "2026-11-14T22:40:37.063Z",
+    "memory": {
+      "rss_mb": 36.43,
+      "heapUsed_mb": 4.69,
+      "heapTotal_mb": 6.37,
+      "external_mb": 1.85
+    },
+    "cpu": {
+      "userCPU_ms": 62,
+      "systemCPU_ms": 140
+    }
+  },
+  "lowLoad": {
+    "rps": 10,
+    "durationMs": 30000,
+    "sent": 30,
+    "ok": 30,
+    "final": {
+      "label": "final-Carga baja (10 req/s)",
+      "timestamp": "2026-11-14T22:40:47.406Z",
+      "memory": {
+        "rss_mb": 36.45,
+        "heapUsed_mb": 4.73,
+        "heapTotal_mb": 5.62,
+        "external_mb": 1.87
+      },
+      "cpu": {
+        "userCPU_ms": 140,
+        "systemCPU_ms": 234
+      }
+    }
+  },
+  "highLoad": {
+    "rps": 50,
+    "durationMs": 30000,
+    "sent": 38,
+    "ok": 38,
+    "final": {
+      "label": "final-Carga alta (50 req/s)",
+      "timestamp": "2026-11-14T22:41:00.673Z",
+      "memory": {
+        "rss_mb": 37.23,
+        "heapUsed_mb": 5,
+        "heapTotal_mb": 5.62,
+        "external_mb": 1.9
+      },
+      "cpu": {
+        "userCPU_ms": 171,
+        "systemCPU_ms": 234
+      }
+    }
+  },
+  "final": {
+    "label": "post-carga-alta",
+    "timestamp": "2026-11-14T22:41:02.679Z",
+    "memory": {
+      "rss_mb": 37.23,
+      "heapUsed_mb": 5,
+      "heapTotal_mb": 5.62,
+      "external_mb": 1.9
+    },
+    "cpu": {
+      "userCPU_ms": 171,
+      "systemCPU_ms": 234
+    }
+  },
+  "heapGrowthMb": 0.31,
+  "rssGrowthMb": 0.8
+}

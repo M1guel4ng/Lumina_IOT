@@ -68,9 +68,9 @@ void setup() {
   Serial.println("   - NODO 2 (sim-02): LED 2 GPIO 25 | PIR 2 GPIO 14");
   Serial.println("========================================================");
 
-  // Sensores PIR como entradas
-  pinMode(PIN_PIR_1, INPUT);
-  pinMode(PIN_PIR_2, INPUT);
+  // Sensores PIR como entradas con resistencia pull-down interna para evitar ruido/falsos positivos
+  pinMode(PIN_PIR_1, INPUT_PULLDOWN);
+  pinMode(PIN_PIR_2, INPUT_PULLDOWN);
 
   // Pin de salida LED 2
   pinMode(PIN_LED_2, OUTPUT);

@@ -1,0 +1,87 @@
+{
+  "test": "load_stress",
+  "timestamp": "2026-11-14T22:38:19.699Z",
+  "server": "http://localhost:3001",
+  "phases": [
+    {
+      "phase": "Ligera",
+      "concurrency": 5,
+      "rounds": 10,
+      "totalReqs": 50,
+      "errors": 0,
+      "rateLimit": 0,
+      "errorPct": 0,
+      "ratePct": 0,
+      "rps": 14.2,
+      "durationMs": 3510,
+      "latency_ms": {
+        "min": 221.46,
+        "avg": 236.95,
+        "p50": 232.1,
+        "p95": 274.88,
+        "p99": 287.56,
+        "max": 287.56
+      }
+    },
+    {
+      "phase": "Media",
+      "concurrency": 20,
+      "rounds": 10,
+      "totalReqs": 200,
+      "errors": 0,
+      "rateLimit": 0,
+      "errorPct": 0,
+      "ratePct": 0,
+      "rps": 23.2,
+      "durationMs": 8637,
+      "latency_ms": {
+        "min": 218.03,
+        "avg": 367.32,
+        "p50": 260.7,
+        "p95": 882.58,
+        "p99": 1157.71,
+        "max": 1182.39
+      }
+    },
+    {
+      "phase": "Alta",
+      "concurrency": 50,
+      "rounds": 5,
+      "totalReqs": 250,
+      "errors": 0,
+      "rateLimit": 0,
+      "errorPct": 0,
+      "ratePct": 0,
+      "rps": 41.5,
+      "durationMs": 6020,
+      "latency_ms": {
+        "min": 266.26,
+        "avg": 505.95,
+        "p50": 485.1,
+        "p95": 716.77,
+        "p99": 1088.15,
+        "max": 1450.45
+      }
+    },
+    {
+      "phase": "Pico (Estrés)",
+      "concurrency": 100,
+      "rounds": 3,
+      "totalReqs": 300,
+      "errors": 0,
+      "rateLimit": 0,
+      "errorPct": 0,
+      "ratePct": 0,
+      "rps": 46.8,
+      "durationMs": 6417,
+      "latency_ms": {
+        "min": 457.67,
+        "avg": 1201.17,
+        "p50": 1267.78,
+        "p95": 1621.7,
+        "p99": 2160,
+        "max": 2315.02
+      }
+    }
+  ]
+}

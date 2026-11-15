@@ -1,0 +1,41 @@
+{
+  "test": "mqtt_latency",
+  "timestamp": "2026-11-14T22:36:16.467Z",
+  "broker": "mqtt://broker.hivemq.com:1883",
+  "topic": "sila/test/latency/1794695712380",
+  "iterations": 60,
+  "results": {
+    "qos0": {
+      "qos": 0,
+      "sent": 60,
+      "received": 60,
+      "lost": 0,
+      "lossPct": 0,
+      "latency_ms": {
+        "min": 218.37,
+        "avg": 232.41,
+        "p50": 221.9,
+        "p95": 281.95,
+        "p99": 319.87,
+        "max": 319.87,
+        "stddev": 19.57
+      }
+    },
+    "qos1": {
+      "qos": 1,
+      "sent": 60,
+      "received": 60,
+      "lost": 0,
+      "lossPct": 0,
+      "latency_ms": {
+        "min": 262.77,
+        "avg": 295.85,
+        "p50": 278.15,
+        "p95": 463.58,
+        "p99": 482.46,
+        "max": 482.46,
+        "stddev": 48.41
+      }
+    }
+  }
+}

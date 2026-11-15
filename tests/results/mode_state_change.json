@@ -1,0 +1,27 @@
+{
+  "test": "mode_state_change",
+  "timestamp": "2026-11-14T22:40:11.705Z",
+  "device": "sim-01",
+  "modeChanges": {
+    "tested": 4,
+    "success": 4,
+    "failed": 0,
+    "successPct": 100,
+    "latency_ms": {
+      "min": 1045.56,
+      "avg": 1271.36,
+      "max": 1897.32
+    }
+  },
+  "lightChanges": {
+    "tested": 10,
+    "success": 10,
+    "failed": 0,
+    "successPct": 100,
+    "latency_ms": {
+      "min": 1043.59,
+      "avg": 1171.13,
+      "max": 1380.14
+    }
+  }
+}

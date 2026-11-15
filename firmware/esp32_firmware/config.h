@@ -26,7 +26,7 @@
 
 // ─── 5. Parámetros de Temporización ───────────────────────────────────────────
 // Tiempo sin movimiento (en milisegundos) antes de apagar la luz automáticamente
-#define OFF_DELAY_MS        10000   // 10 segundos de cortesía sin movimiento
+#define OFF_DELAY_MS        5000   // 5 segundos de cortesía sin movimiento
 
 // ─── 6. Parámetros de Luz Ambiental (LDR) ─────────────────────────────────────
 #define LDR_UMBRAL_ENCENDIDO  40    // Menos de 40% de luz ambiental

@@ -1,0 +1,64 @@
+{
+  "test": "packet_loss_db",
+  "timestamp": "2026-11-14T22:39:25.453Z",
+  "device": "sim-01",
+  "broker": "mqtt://broker.hivemq.com:1883",
+  "results": [
+    {
+      "scenario": "Tasa baja   (1 msg/s)",
+      "count": 10,
+      "intervalMs": 1000,
+      "sent": 10,
+      "dbVerifications": 2,
+      "dbConfirmed": 2,
+      "dbReadLatency_ms": {
+        "min": 224.59,
+        "avg": 231.35,
+        "p95": 238.1,
+        "max": 238.1
+      }
+    },
+    {
+      "scenario": "Tasa media  (5 msg/s)",
+      "count": 20,
+      "intervalMs": 200,
+      "sent": 20,
+      "dbVerifications": 4,
+      "dbConfirmed": 0,
+      "dbReadLatency_ms": {
+        "min": 224.43,
+        "avg": 254.24,
+        "p95": 298.39,
+        "max": 298.39
+      }
+    },
+    {
+      "scenario": "Tasa alta   (10 msg/s)",
+      "count": 20,
+      "intervalMs": 100,
+      "sent": 20,
+      "dbVerifications": 4,
+      "dbConfirmed": 0,
+      "dbReadLatency_ms": {
+        "min": 225.95,
+        "avg": 252.61,
+        "p95": 318.97,
+        "max": 318.97
+      }
+    },
+    {
+      "scenario": "Ráfaga      (sin pausa)",
+      "count": 20,
+      "intervalMs": 10,
+      "sent": 20,
+      "dbVerifications": 4,
+      "dbConfirmed": 0,
+      "dbReadLatency_ms": {
+        "min": 221,
+        "avg": 228.26,
+        "p95": 232.32,
+        "max": 232.32
+      }
+    }
+  ]
+}

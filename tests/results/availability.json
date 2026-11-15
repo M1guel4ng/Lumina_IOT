@@ -1,0 +1,29 @@
+{
+  "test": "availability",
+  "timestamp": "2026-11-14T22:42:25.120Z",
+  "durationMs": 20000,
+  "pollMs": 2000,
+  "rounds": 9,
+  "health": {
+    "availability": 100,
+    "avgLatency": 3.03,
+    "maxLatency": 6.75
+  },
+  "nodes": {
+    "availability": 100,
+    "avgLatency": 233.49,
+    "maxLatency": 239.67
+  },
+  "mqtt": {
+    "availability": 66.667,
+    "reconnects": 0
+  },
+  "outages": [
+    {
+      "start": "2026-11-14T22:42:04.962Z",
+      "end": "2026-11-14T22:42:11.453Z",
+      "durationMs": 6725
+    }
+  ],
+  "totalDowntimeMs": 6725
+}

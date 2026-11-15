@@ -1,0 +1,17 @@
+{
+  "name": "lumina-iot-tests",
+  "version": "1.0.0",
+  "description": "Suite de pruebas experimentales para Lumina IoT - Latencia, Disponibilidad, Recursos y Paquetes MQTT",
+  "type": "module",
+  "scripts": {
+    "test:api":    "node test_api_latency.js",
+    "test:mqtt":   "node test_mqtt_latency.js",
+    "test:load":   "node test_load_stress.js",
+    "test:avail":  "node test_availability.js",
+    "test:sse":    "node test_sse_realtime.js",
+    "test:all":    "node run_all_tests.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.16.0"
+  }
+}
